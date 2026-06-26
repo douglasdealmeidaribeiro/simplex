@@ -178,6 +178,26 @@ select:focus {
   background: #f8fafc;
 }
 
+.button.accent {
+  border-color: #0f766e;
+  background: #ecfdfa;
+  color: #115e59;
+}
+
+.button.accent:hover {
+  border-color: #0f766e;
+  background: #ccfbf1;
+}
+
+.button:disabled,
+.button:disabled:hover {
+  border-color: var(--line);
+  background: #eef2f6;
+  color: #98a2b3;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .messages {
   display: grid;
   gap: 10px;

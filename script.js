@@ -10,7 +10,8 @@ const state = {
   tabela: null,
   iter: 0,
   finalizado: false,
-  cOriginal: []
+  cOriginal: [],
+  historico: []
 };
 
 const els = {
@@ -24,6 +25,7 @@ const els = {
   btnGerar: document.querySelector("#btnGerar"),
   btnIniciar: document.querySelector("#btnIniciar"),
   btnProxima: document.querySelector("#btnProxima"),
+  btnExcel: document.querySelector("#btnExcel"),
   btnReiniciar: document.querySelector("#btnReiniciar")
 };
 
@@ -41,6 +43,10 @@ function formatNumber(value, digits = 4) {
   if (!Number.isFinite(num)) return "";
   const clean = Math.abs(num) < 1e-10 ? 0 : num;
   return clean.toFixed(digits);
+}
+
+function cloneTableau(tabela) {
+  return tabela.map((linha) => [...linha]);
 }
 
 function parsePositiveInt(value, name) {
@@ -88,6 +94,10 @@ function setOutput(html) {
   els.output.scrollTop = els.output.scrollHeight;
 }
 
+function setExcelEnabled(enabled) {
+  els.btnExcel.disabled = !enabled;
+}
+
 function resetState() {
   state.tipo = els.tipo.value;
   state.nVar = Number(els.nVar.value);
@@ -97,6 +107,18 @@ function resetState() {
   state.iter = 0;
   state.finalizado = false;
   state.cOriginal = [];
+  state.historico = [];
+  setExcelEnabled(false);
+}
+
+function registrarHistorico(titulo, tabela, linhaPivo = null, colunaPivo = null, extra = {}) {
+  state.historico.push({
+    titulo,
+    tabela: cloneTableau(tabela),
+    linhaPivo,
+    colunaPivo,
+    extra
+  });
 }
 
 function pivotar(tabela, linhaPivo, colunaPivo) {
@@ -335,6 +357,9 @@ function iniciar() {
     state.iter = 0;
     state.finalizado = false;
     state.cOriginal = c;
+    state.historico = [];
+    registrarHistorico("Tabela inicial (Iteração 0)", tabela);
+    setExcelEnabled(false);
 
     els.messages.innerHTML = "";
     if (constraints.some(([, op]) => op === ">=" || op === "=")) {
@@ -370,6 +395,8 @@ function proximaIteracao() {
     if (linhaPivo === null) {
       const { x, z } = extrairSolucao(state.tabela, state.nVar, state.nRest, state.cOriginal);
       state.finalizado = true;
+      registrarHistorico("Ótimo encontrado", state.tabela, null, null, { x, z });
+      setExcelEnabled(true);
 
       const values = x.map((val, i) => `<li>x${i + 1} = <strong>${formatNumber(val)}</strong></li>`).join("");
       const html = `
@@ -377,6 +404,7 @@ function proximaIteracao() {
         <h3>Resultado final</h3>
         <ul class="result-list">${values}</ul>
         <p class="final-z"><strong>Valor ótimo (Z): ${formatNumber(z)}</strong></p>
+        <p class="empty-state">Agora você pode baixar o arquivo Excel com todas as iterações.</p>
       `;
       setOutput(html);
       setMessage("success", "Ótimo encontrado.");
@@ -386,7 +414,17 @@ function proximaIteracao() {
     state.iter += 1;
     const pivoVal = state.tabela[linhaPivo][colunaPivo];
     const antes = state.tabela.map((linha) => [...linha]);
+    registrarHistorico(`Iteração ${state.iter} - antes do pivoteamento`, antes, linhaPivo, colunaPivo, {
+      colunaPivo: state.headers[colunaPivo],
+      linhaPivo: linhaPivo + 1,
+      pivo: pivoVal
+    });
     pivotar(state.tabela, linhaPivo, colunaPivo);
+    registrarHistorico(`Iteração ${state.iter} - depois do pivoteamento`, state.tabela, linhaPivo, colunaPivo, {
+      colunaPivo: state.headers[colunaPivo],
+      linhaPivo: linhaPivo + 1,
+      pivo: pivoVal
+    });
 
     const html = `
       <div class="iteration-note">
@@ -407,6 +445,144 @@ function proximaIteracao() {
   }
 }
 
+function xmlEscape(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+function sheetName(value, fallback) {
+  const cleaned = String(value)
+    .replace(/[\[\]:*?/\\]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 31);
+  return cleaned || fallback;
+}
+
+function xmlCell(value, type = "String", styleId = "") {
+  const style = styleId ? ` ss:StyleID="${styleId}"` : "";
+  return `<Cell${style}><Data ss:Type="${type}">${xmlEscape(value)}</Data></Cell>`;
+}
+
+function tableauToRows(snapshot) {
+  const rows = [];
+  rows.push(`<Row>${xmlCell(snapshot.titulo, "String", "title")}</Row>`);
+
+  if (snapshot.extra && snapshot.extra.pivo !== undefined) {
+    rows.push(`<Row>${xmlCell("Coluna pivô")}${xmlCell(snapshot.extra.colunaPivo)}</Row>`);
+    rows.push(`<Row>${xmlCell("Linha pivô")}${xmlCell(snapshot.extra.linhaPivo, "Number")}</Row>`);
+    rows.push(`<Row>${xmlCell("Pivô")}${xmlCell(formatNumber(snapshot.extra.pivo, 6), "Number")}</Row>`);
+  }
+
+  rows.push("<Row></Row>");
+  rows.push(`<Row>${state.headers.map((header) => xmlCell(header, "String", "header")).join("")}</Row>`);
+
+  snapshot.tabela.forEach((linha, i) => {
+    const cells = linha.map((value, j) => {
+      let style = "";
+      if (i === snapshot.linhaPivo && j === snapshot.colunaPivo) {
+        style = "pivot";
+      } else if (j === snapshot.colunaPivo) {
+        style = "pivotCol";
+      }
+      return xmlCell(formatNumber(value), "Number", style);
+    }).join("");
+    rows.push(`<Row>${cells}</Row>`);
+  });
+
+  if (snapshot.extra && snapshot.extra.x && snapshot.extra.z !== undefined) {
+    rows.push("<Row></Row>");
+    rows.push(`<Row>${xmlCell("Resultado final", "String", "title")}</Row>`);
+    snapshot.extra.x.forEach((value, i) => {
+      rows.push(`<Row>${xmlCell(`x${i + 1}`)}${xmlCell(formatNumber(value), "Number")}</Row>`);
+    });
+    rows.push(`<Row>${xmlCell("Valor ótimo (Z)")}${xmlCell(formatNumber(snapshot.extra.z), "Number")}</Row>`);
+  }
+
+  return rows.join("");
+}
+
+function gerarExcelXml() {
+  const worksheets = state.historico.map((snapshot, index) => `
+    <Worksheet ss:Name="${xmlEscape(sheetName(snapshot.titulo, `Iteração ${index + 1}`))}">
+      <Table>
+        ${tableauToRows(snapshot)}
+      </Table>
+    </Worksheet>
+  `).join("");
+
+  return `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+  xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:x="urn:schemas-microsoft-com:office:excel"
+  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+  <Styles>
+    <Style ss:ID="Default" ss:Name="Normal">
+      <Alignment ss:Vertical="Center"/>
+      <Font ss:FontName="Calibri" ss:Size="11"/>
+    </Style>
+    <Style ss:ID="title">
+      <Font ss:FontName="Calibri" ss:Size="13" ss:Bold="1"/>
+    </Style>
+    <Style ss:ID="header">
+      <Interior ss:Color="#E8F1FF" ss:Pattern="Solid"/>
+      <Font ss:Bold="1"/>
+      <Borders>
+        <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+      </Borders>
+    </Style>
+    <Style ss:ID="pivotCol">
+      <Interior ss:Color="#FFF3CD" ss:Pattern="Solid"/>
+    </Style>
+    <Style ss:ID="pivot">
+      <Interior ss:Color="#FFD966" ss:Pattern="Solid"/>
+      <Font ss:Bold="1"/>
+    </Style>
+  </Styles>
+  <Worksheet ss:Name="Resumo">
+    <Table>
+      <Row>${xmlCell("Simplex Passo a Passo - histórico de iterações", "String", "title")}</Row>
+      <Row>${xmlCell("Tipo")}${xmlCell(state.tipo)}</Row>
+      <Row>${xmlCell("Variáveis")}${xmlCell(state.nVar, "Number")}</Row>
+      <Row>${xmlCell("Restrições")}${xmlCell(state.nRest, "Number")}</Row>
+      <Row>${xmlCell("Total de registros")}${xmlCell(state.historico.length, "Number")}</Row>
+    </Table>
+  </Worksheet>
+  ${worksheets}
+</Workbook>`;
+}
+
+function baixarExcel() {
+  try {
+    if (!state.tabela) {
+      throw new Error("Primeiro clique em Iniciar.");
+    }
+
+    if (!state.finalizado) {
+      throw new Error("Avance até a solução ótima antes de baixar o Excel.");
+    }
+
+    const xml = gerarExcelXml();
+    const blob = new Blob([xml], { type: "application/vnd.ms-excel;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "simplex-iteracoes.xls";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setMessage("success", "Arquivo Excel gerado com todas as iterações.");
+  } catch (error) {
+    setMessage("error", error.message);
+  }
+}
+
 function reiniciar() {
   gerarTabelas();
   resetState();
@@ -416,6 +592,7 @@ function reiniciar() {
 els.btnGerar.addEventListener("click", gerarTabelas);
 els.btnIniciar.addEventListener("click", iniciar);
 els.btnProxima.addEventListener("click", proximaIteracao);
+els.btnExcel.addEventListener("click", baixarExcel);
 els.btnReiniciar.addEventListener("click", reiniciar);
 
 gerarTabelas();
