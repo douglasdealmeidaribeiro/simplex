@@ -1,4 +1,4 @@
-# Simplex Passo a Passo (ensino)
+# Simplex Passo a Passo
 
 Aplicação web 100% estática para estudar o Método Simplex passo a passo.
 
