@@ -359,7 +359,7 @@ function iniciar() {
     state.cOriginal = c;
     state.historico = [];
     registrarHistorico("Tabela inicial (Iteração 0)", tabela);
-    setExcelEnabled(false);
+    setExcelEnabled(true);
 
     els.messages.innerHTML = "";
     if (constraints.some(([, op]) => op === ">=" || op === "=")) {
@@ -404,7 +404,7 @@ function proximaIteracao() {
         <h3>Resultado final</h3>
         <ul class="result-list">${values}</ul>
         <p class="final-z"><strong>Valor ótimo (Z): ${formatNumber(z)}</strong></p>
-        <p class="empty-state">Agora você pode baixar o arquivo Excel com todas as iterações.</p>
+        <p class="empty-state">Agora você pode baixar o arquivo Excel completo com todas as iterações.</p>
       `;
       setOutput(html);
       setMessage("success", "Ótimo encontrado.");
@@ -563,21 +563,29 @@ function baixarExcel() {
       throw new Error("Primeiro clique em Iniciar.");
     }
 
-    if (!state.finalizado) {
-      throw new Error("Avance até a solução ótima antes de baixar o Excel.");
+    const xml = "\ufeff" + gerarExcelXml();
+    const blob = new Blob([xml], { type: "application/vnd.ms-excel;charset=utf-8" });
+
+    if (window.navigator && typeof window.navigator.msSaveOrOpenBlob === "function") {
+      window.navigator.msSaveOrOpenBlob(blob, "simplex-iteracoes.xls");
+      return;
     }
 
-    const xml = gerarExcelXml();
-    const blob = new Blob([xml], { type: "application/vnd.ms-excel;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
     link.download = "simplex-iteracoes.xls";
+    link.rel = "noopener";
+    link.style.display = "none";
     document.body.appendChild(link);
     link.click();
     link.remove();
-    URL.revokeObjectURL(url);
-    setMessage("success", "Arquivo Excel gerado com todas as iterações.");
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+
+    const detalhe = state.finalizado
+      ? "com todas as iterações até a solução ótima"
+      : "com as iterações calculadas até agora";
+    setMessage("success", `Arquivo Excel gerado ${detalhe}.`);
   } catch (error) {
     setMessage("error", error.message);
   }
