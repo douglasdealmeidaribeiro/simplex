@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Simplex Passo a Passo (ensino)</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Método Simplex</p>
+          <h1>Simplex Passo a Passo (ensino)</h1>
+          <p class="subtitle">
+            Monte o tableau, acompanhe a coluna pivô, a linha pivô e avance uma iteração por vez.
+          </p>
+        </div>
+      </section>
+
+      <section class="card controls-card" aria-labelledby="config-title">
+        <div class="section-heading">
+          <h2 id="config-title">Configuração</h2>
+        </div>
+
+        <div class="controls-grid">
+          <label class="field">
+            <span>Tipo</span>
+            <select id="tipo">
+              <option value="max" selected>max</option>
+              <option value="min">min</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Nº de variáveis</span>
+            <input id="nVar" type="number" min="1" max="8" step="1" value="2">
+          </label>
+
+          <label class="field">
+            <span>Nº de restrições</span>
+            <input id="nRest" type="number" min="1" max="8" step="1" value="3">
+          </label>
+
+          <button id="btnGerar" class="button primary" type="button">Gerar campos</button>
+        </div>
+
+        <div id="messages" class="messages" aria-live="polite"></div>
+      </section>
+
+      <section class="input-grid">
+        <article class="card" aria-labelledby="objetivo-title">
+          <div class="section-heading">
+            <h2 id="objetivo-title">Função objetivo</h2>
+          </div>
+          <div id="objectiveArea" class="table-wrap"></div>
+        </article>
+
+        <article class="card" aria-labelledby="restricoes-title">
+          <div class="section-heading">
+            <h2 id="restricoes-title">Restrições</h2>
+          </div>
+          <div id="constraintsArea" class="table-wrap"></div>
+        </article>
+      </section>
+
+      <section class="card actions-card" aria-label="Ações">
+        <button id="btnIniciar" class="button primary" type="button">Iniciar</button>
+        <button id="btnProxima" class="button" type="button">Próxima iteração</button>
+        <button id="btnReiniciar" class="button ghost" type="button">Reiniciar</button>
+      </section>
+
+      <section class="card output-card" aria-labelledby="saida-title">
+        <div class="section-heading">
+          <h2 id="saida-title">Saída</h2>
+        </div>
+        <div id="output" class="output" aria-live="polite">
+          <p class="empty-state">Clique em <strong>Gerar campos</strong>, preencha os valores e inicie o método.</p>
+        </div>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
